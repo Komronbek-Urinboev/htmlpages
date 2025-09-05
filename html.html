@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Таймер обратного отсчёта</title>
+  <style>
+    :root {
+      --bg1: #0f172a;
+      --bg2: #020617;
+      --fg:  #f8fafc;
+      --muted:#94a3b8;
+      --accent:#38bdf8;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, Inter, Arial, system-ui, sans-serif;
+      color: var(--fg);
+      background: radial-gradient(1200px 800px at 50% 20%, var(--bg1), var(--bg2));
+      overflow: hidden;
+    }
+    .wrap {
+      min-height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: clamp(16px, 3vw, 48px);
+    }
+    .card {
+      width: 100%;
+      max-width: 1100px;
+      text-align: center;
+      backdrop-filter: blur(6px);
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 24px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+      padding: clamp(20px, 4vw, 48px);
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+      font-size: clamp(20px, 2.4vw, 32px);
+      color: var(--muted);
+    }
+    .label {
+      margin-top: 4px;
+      font-size: clamp(24px, 4.2vw, 44px);
+      font-weight: 900;
+      line-height: 1.1;
+      color: var(--fg);
+    }
+    .timer {
+      margin-top: clamp(16px, 3vw, 28px);
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: clamp(10px, 2vw, 18px);
+    }
+    .slot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: clamp(10px, 2.2vw, 18px);
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .num {
+      font-variant-numeric: tabular-nums lining-nums;
+      font-weight: 900;
+      letter-spacing: 1px;
+      line-height: 1;
+      font-size: clamp(44px, 12vw, 160px);
+      text-shadow: 0 4px 28px rgba(56,189,248,0.18);
+    }
+    .unit {
+      margin-top: 8px;
+      font-size: clamp(12px, 2.2vw, 20px);
+      color: var(--muted);
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }
+    .controls {
+      margin-top: clamp(14px, 2.4vw, 22px);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+    }
+    button, input[type="datetime-local"], input[type="text"] {
+      background: rgba(255,255,255,0.06);
+      color: var(--fg);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 14px;
+      outline: none;
+    }
+    button:hover { border-color: rgba(56,189,248,0.8); cursor: pointer; }
+    .hint { margin-top: 10px; color: var(--muted); font-size: 12px; }
+
+    @media (max-width: 640px) {
+      .timer { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card" role="region" aria-label="Таймер обратного отсчёта">
+      <h1 id="prefix">До чего-то осталось:</h1>
+      <div id="label" class="label">Моё событие</div>
+
+      <div class="timer" aria-live="polite" aria-atomic="true">
+        <div class="slot" aria-label="Дни">
+          <div id="d" class="num">00</div>
+          <div class="unit" id="ud">дней</div>
+        </div>
+        <div class="slot" aria-label="Часы">
+          <div id="h" class="num">00</div>
+          <div class="unit" id="uh">часов</div>
+        </div>
+        <div class="slot" aria-label="Минуты">
+          <div id="m" class="num">00</div>
+          <div class="unit" id="um">минут</div>
+        </div>
+        <div class="slot" aria-label="Секунды">
+          <div id="s" class="num">00</div>
+          <div class="unit" id="us">секунд</div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <input id="dt" type="datetime-local" aria-label="Дата и время события" />
+        <input id="lb" type="text" placeholder="Название события (например: Экзамен IELTS)" aria-label="Название события" />
+        <button id="apply">Применить</button>
+        <button id="fs">На весь экран</button>
+        <button id="share">Ссылка с параметрами</button>
+      </div>
+      <div class="hint">Warning! This site created specially for user Mafin_! — <code>?You do not have any rights, maybe)</code></div>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const labelDefault = params.get('label') || 'Моё событие';
+    const toParam = params.get('to');
+
+    const targetDefault = (() => {
+      if (toParam) {
+        const parsed = new Date(toParam);
+        if (!isNaN(parsed)) return parsed;
+      }
+      const now = new Date();
+      return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    })();
+
+    const el = {
+      d: document.getElementById('d'),
+      h: document.getElementById('h'),
+      m: document.getElementById('m'),
+      s: document.getElementById('s'),
+      ud: document.getElementById('ud'),
+      uh: document.getElementById('uh'),
+      um: document.getElementById('um'),
+      us: document.getElementById('us'),
+      label: document.getElementById('label'),
+      dt: document.getElementById('dt'),
+      lb: document.getElementById('lb'),
+      apply: document.getElementById('apply'),
+      fs: document.getElementById('fs'),
+      share: document.getElementById('share'),
+      prefix: document.getElementById('prefix'),
+    };
+
+    el.label.textContent = labelDefault;
+    el.lb.value = labelDefault;
+    (function setInputFromDate(d) {
+      const pad = n => String(n).padStart(2, '0');
+      const loc = new Date(d.getTime() - d.getTimezoneOffset()*60000)
+        .toISOString().slice(0,19);
+      el.dt.value = loc;
+    })(targetDefault);
+
+    let target = targetDefault;
+
+    function declension(num, forms) {
+      const n = Math.abs(num) % 100;
+      const n1 = n % 10;
+      if (n > 10 && n < 20) return forms[2];
+      if (n1 > 1 && n1 < 5) return forms[1];
+      if (n1 === 1) return forms[0];
+      return forms[2];
+    }
+
+    function pad2(n) { return String(Math.floor(n)).padStart(2, '0'); }
+
+    function tick() {
+      const now = new Date();
+      let diff = Math.max(0, target - now);
+
+      const totalSec = Math.floor(diff / 1000);
+      const days = Math.floor(totalSec / 86400);
+      const hours = Math.floor((totalSec % 86400) / 3600);
+      const minutes = Math.floor((totalSec % 3600) / 60);
+      const seconds = totalSec % 60;
+
+      el.d.textContent = pad2(days);
+      el.h.textContent = pad2(hours);
+      el.m.textContent = pad2(minutes);
+      el.s.textContent = pad2(seconds);
+
+      el.ud.textContent = declension(days, ["день","дня","дней"]);
+      el.uh.textContent = declension(hours, ["час","часа","часов"]);
+      el.um.textContent = declension(minutes, ["минута","минуты","минут"]);
+      el.us.textContent = declension(seconds, ["секунда","секунды","секунд"]);
+
+      if (diff === 0) {
+        el.prefix.textContent = "Событие наступило:";
+        document.title = 'Событие наступило!';
+      } else {
+        document.title = `${pad2(days)}:${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)} — обратный отсчёт`;
+      }
+    }
+
+    function loop() {
+      tick();
+      requestAnimationFrame(loop);
+    }
+    loop();
+
+    el.apply.addEventListener('click', () => {
+      const v = el.dt.value;
+      const lbl = el.lb.value.trim() || 'Моё событие';
+      const dt = new Date(v);
+      if (isNaN(dt)) {
+        alert('Неверная дата/время.');
+        return;
+      }
+      target = new Date(dt);
+      el.label.textContent = lbl;
+      tick();
+    });
+
+    el.fs.addEventListener('click', async () => {
+      const root = document.documentElement;
+      try {
+        if (!document.fullscreenElement) {
+          await root.requestFullscreen();
+        } else {
+          await document.exitFullscreen();
+        }
+      } catch (e) {
+        alert('Ваш браузер не разрешил полноэкранный режим.');
+      }
+    });
+
+    el.share.addEventListener('click', async () => {
+      const lbl = encodeURIComponent(el.label.textContent);
+      const isoLocal = (() => {
+        const d = new Date(el.dt.value);
+        return new Date(d.getTime()).toISOString().slice(0,19);
+      })();
+      const url = `${location.origin}${location.pathname}?to=${isoLocal}&label=${lbl}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        el.share.textContent = 'Ссылка скопирована!';
+        setTimeout(() => el.share.textContent = 'Ссылка с параметрами', 1500);
+      } catch (_) {
+        prompt('Скопируйте ссылку вручную:', url);
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key.toLowerCase() === 'f') {
+        el.fs.click();
+      }
+    });
+  </script>
+</body>
+</html>
